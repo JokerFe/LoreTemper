@@ -42,12 +42,12 @@ LoreTemper 面向 UI 设计、页面开发和操作教程等视频学习场景�
 
 ## 环境要求
 
-当前安装脚本、双击启动器和后台服务以 **macOS / Apple Silicon** 为主要运行环境。Windows、Linux 尚未完成适配验证；代码中仍有 macOS 命令及 Unix 文件锁依赖，不能直接照搬下面的安装步骤。
+当前安装脚本、双击启动器和后台服务以 **macOS / Apple Silicon** 为主要运行环境。Windows 用户可按下方「Windows：通过 WSL2 启动」准备 Linux 运行环境；原生 Windows Python 暂不支持。WSL2 步骤已按源码依赖与官方安装文档核对，但尚未完成 Windows 实机端到端验证。
 
 | 依赖 | 用途 |
 | --- | --- |
 | Python 3.11–3.13、uv | 后端及 Python 依赖管理 |
-| Node.js 20、npm | 前端安装与构建 |
+| Node.js 20 / 22、npm | 前端安装与构建；下方 WSL2 示例使用 22 |
 | FFmpeg、ffprobe | 音视频探测、音轨提取、截图与播放代理 |
 | whisper-cli | 默认语音转写后端，由 whisper.cpp 提供 |
 | Ollama | 本地视觉与总结模型服务，使用 Ollama 通道时需要 |
@@ -114,6 +114,134 @@ uv run video-tutor start
 传统「导入视频」入口支持目录监听，文件稳定后自动入队。显式选择文件的学习入口仅导入所选素材；两种方式的目录监听行为不同。
 
 默认接通电源后才启动新任务，可在偏好设置调整。不要将项目的 `data/`、`work/` 或生成产物目录设为视频来源。手动运行时关闭终端会停止其子进程；电脑休眠也可能暂停处理。
+
+## Windows：通过 WSL2 启动
+
+后端使用 `fcntl` 文件锁及 Unix 进程管理，当前不能在 PowerShell 中直接运行原生 Windows Python。这里将后端、前端构建工具与 Ollama 都安装在 **同一个 WSL2 Ubuntu 环境**中，Windows 浏览器用于访问工作台。不要复用 macOS 的 `.venv`、`node_modules` 或配置中的绝对路径。
+
+### 1. 安装 WSL2
+
+在 Windows 11 或支持 WSL 的 Windows 10 上，以管理员身份打开 **PowerShell**：
+
+```powershell
+wsl --install -d Ubuntu-24.04
+```
+
+按提示重启，首次打开 Ubuntu 时创建 Linux 用户。然后在 PowerShell 检查发行版的 `VERSION` 为 `2`，并进入 Ubuntu：
+
+```powershell
+wsl --list --verbose
+# 仅当 VERSION 为 1 时执行：
+# wsl --set-version Ubuntu-24.04 2
+wsl -d Ubuntu-24.04
+```
+
+需要的 Windows 版本、虚拟化设置与安装故障处理见 [Microsoft WSL 安装说明](https://learn.microsoft.com/en-us/windows/wsl/install)。**以下 Bash 命令均在 Ubuntu 终端执行，不在 PowerShell 中执行。**
+
+### 2. 安装 Linux 工具与项目依赖
+
+```bash
+sudo apt update
+sudo apt install -y git curl ca-certificates build-essential cmake pkg-config libcurl4-openssl-dev ffmpeg zstd
+
+# 安装 uv 与 Python
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source "$HOME/.local/bin/env"
+uv python install 3.12
+
+# 安装 nvm 与 Node.js
+curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.8/install.sh | bash
+export NVM_DIR="$HOME/.nvm"
+source "$NVM_DIR/nvm.sh"
+nvm install 22
+nvm alias default 22
+
+# 将代码与依赖放在 Linux 用户目录
+mkdir -p "$HOME/projects"
+cd "$HOME/projects"
+git clone https://github.com/JokerFe/LoreTemper.git
+cd LoreTemper
+uv sync --frozen --python 3.12
+(cd frontend && npm ci && npm run build)
+uv run video-tutor init
+```
+
+工具安装方式参考 [uv 安装文档](https://docs.astral.sh/uv/getting-started/installation/)与 [nvm 安装文档](https://github.com/nvm-sh/nvm#installing-and-updating)。已克隆过项目时，进入现有目录即可，不必再次执行 `git clone`。不要运行面向 macOS 的 `scripts/setup.sh` 或 `.command` 启动器。
+
+新克隆不含私人课程目录，而当前工作流入口需要 `learning/catalog.json`。在项目根目录创建空目录索引；下面的命令不会覆盖已有记录：
+
+```bash
+uv run python - <<'PY'
+from pathlib import Path
+catalog = Path("learning/catalog.json")
+catalog.parent.mkdir(parents=True, exist_ok=True)
+if not catalog.exists():
+    with catalog.open("x", encoding="utf-8") as stream:
+        stream.write('{"schema_version": 1, "batches": []}\n')
+PY
+```
+
+### 3. 安装 whisper.cpp 与 Ollama
+
+下面构建 CPU 版本的 Whisper 转写工具；GPU 加速需要另外配置，不是启动前提：
+
+```bash
+mkdir -p "$HOME/tools" "$HOME/.local/bin"
+git clone --depth 1 https://github.com/ggml-org/whisper.cpp.git "$HOME/tools/whisper.cpp"
+cmake -S "$HOME/tools/whisper.cpp" -B "$HOME/tools/whisper.cpp/build" -DCMAKE_BUILD_TYPE=Release
+cmake --build "$HOME/tools/whisper.cpp/build" --config Release -j 2
+ln -sf "$HOME/tools/whisper.cpp/build/bin/whisper-cli" "$HOME/.local/bin/whisper-cli"
+export PATH="$HOME/.local/bin:$PATH"
+whisper-cli --help
+
+curl -fsSL https://ollama.com/install.sh | sh
+```
+
+构建及安装参考 [whisper.cpp](https://github.com/ggml-org/whisper.cpp) 与 [Ollama Linux 文档](https://docs.ollama.com/linux)。若已存在 `~/tools/whisper.cpp`，跳过克隆并使用已有源码构建。
+
+检查 Ollama 是否已在 WSL 中运行：
+
+```bash
+curl --fail http://127.0.0.1:11434/api/tags
+```
+
+若无法连接，在另一个 Ubuntu 终端运行 `ollama serve` 并保持该终端打开。若安装程序已经启动服务，则无需再启动一个实例。本方案使用 WSL 内的 Ollama，不依赖 Windows 主机上的 Ollama 服务。
+
+回到项目目录下载模型并检查环境：
+
+```bash
+cd "$HOME/projects/LoreTemper"
+uv run video-tutor models prepare
+uv run video-tutor doctor
+```
+
+默认视觉与总结模型占用较多内存；CPU 推理可能较慢。先用短视频验证，再处理长课程。需要 GPU 加速时，按模型工具的官方文档配置适合本机显卡的驱动与后端。
+
+### 4. 启动并从 Windows 浏览器访问
+
+```bash
+cd "$HOME/projects/LoreTemper"
+export PATH="$HOME/.local/bin:$PATH"
+uv run video-tutor start --no-open-browser
+```
+
+保持终端打开，将终端输出的完整 `http://127.0.0.1:8765/#token=…` 链接复制到 Windows 浏览器。WSL 通常支持通过 Windows 的 `localhost` 访问 Linux 服务；若无法连接，先在 Ubuntu 中执行 `curl -I http://127.0.0.1:8765` 检查服务，再参考 [WSL 网络说明](https://learn.microsoft.com/en-us/windows/wsl/networking)。不要通过改为公开监听地址来绕过问题。
+
+首次先选择 **Ollama** 通道并使用短视频测试。页面中的文件与输出路径必须采用 WSL 路径，例如：
+
+| Windows 路径 | 页面中填写的 WSL 路径 |
+| --- | --- |
+| `D:\Videos\lesson.mp4` | `/mnt/d/Videos/lesson.mp4` |
+| `D:\LoreTemper-output` | `/mnt/d/LoreTemper-output` |
+
+包含空格的路径在命令行中加引号，在页面输入框中直接填写。Linux 下暂不支持本机文件选择弹窗，请手动填写路径。
+
+WSL 使用注意事项：
+
+- 后续启动只需确保 Ollama 正在运行，再执行本节的 `start` 命令；无需重复安装和下载模型。
+- `Ctrl+C` 停止当前启动器管理的服务。关闭 WSL 或执行 `wsl --shutdown` 会终止其中的任务；当前 macOS 的 `service install` / `service uninstall` 不适用于 WSL。
+- WSL 下不会读取 Windows 电池状态，因此「接通电源后启动」限制不生效；长任务请自行接通电源并避免休眠。
+- 本节启动步骤以 Ollama 为起点；如使用 Codex 通道，需让同一 WSL 环境能找到并使用已登录的 Linux `codex` 命令，不能假定 Windows 客户端的登录会自动共享。该组合尚未在本项目中完成实机验证。
 
 ## 资料保存与配置
 
