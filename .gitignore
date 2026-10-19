@@ -1,0 +1,84 @@
+# Python environments, caches and build output
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.tox/
+*.egg-info/
+/build/
+/dist/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# JavaScript dependencies, builds and test reports (keep package-lock.json)
+node_modules/
+/frontend/dist/
+*.tsbuildinfo
+.vite/
+coverage/
+playwright-report/
+test-results/
+blob-report/
+
+# Local project data, course notes/evidence and generated exports
+# Keep these files locally; learning/ includes the personal course catalog.
+/data/
+/work/
+/learning/
+/exports/
+/models/
+
+# Source media and downloaded model weights
+*.[mM][pP]4
+*.[mM][oO][vV]
+*.[mM][kK][vV]
+*.[wW][eE][bB][mM]
+*.[aA][vV][iI]
+*.[mM]4[vV]
+*.[wW][aA][vV]
+*.[mM][pP]3
+*.[mM]4[aA]
+*.[fF][lL][aA][cC]
+*.[aA][aA][cC]
+*.[oO][gG][gG]
+*.gguf
+*.ggml
+*.safetensors
+ggml-*.bin
+
+# Local credentials and environment overrides (keep shareable templates)
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+.envrc
+
+# Runtime databases, logs and temporary files
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-wal
+*.sqlite3-shm
+*.db-wal
+*.db-shm
+*.log
+*.pid
+*.tmp
+*.swp
+*.swo
+*~
+
+# Editor and operating system metadata
+.idea/
+.DS_Store
+._*
+Thumbs.db
+Desktop.ini
+
