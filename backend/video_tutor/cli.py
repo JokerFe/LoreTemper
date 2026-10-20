@@ -43,6 +43,7 @@ def doctor():
 @app.command("workflow-worker")
 def workflow_worker():
     from .workflows import run_workflow_worker
+
     run_workflow_worker()
 
 
@@ -249,12 +250,39 @@ def study_clip(source: str, output: str, start_seconds: float = 0, end_seconds: 
     runner = StudyRunner(output_path)
     started = time.monotonic()
     cached = len(list((output_path / "calls").glob("*/result.json")))
-    write_json(output_path / "status.json", {"status": "running", "source": str(source_path),
-                                           "start_ms": start, "end_ms": end})
+    write_json(
+        output_path / "status.json", {"status": "running", "source": str(source_path), "start_ms": start, "end_ms": end}
+    )
     try:
         optimized_study(runner, transcript, source_path, start, end)
-        write_json(output_path / "metrics.json", {**runner.metrics(), "wall_seconds_this_invocation": time.monotonic() - started,
-                                                 "cached_calls_before_invocation": cached})
+        from .learning_quality import finalize_notes
+        from .study import source_text
+        from .thematic_study import validate_image_references
+
+        selected = output_path / "selected-frames-after-repair.json"
+        if not selected.exists():
+            selected = output_path / "selected-frames.json"
+        allowed = {f["id"] for f in json.loads(selected.read_text())}
+        evidence = (output_path / "evidence-cards.md").read_text()
+        evidence += "\n".join(
+            p.read_text() for p in sorted(output_path.glob("targeted-evidence-repair-*-observations.md"))
+        )
+        notes, _ = finalize_notes(
+            runner,
+            (output_path / "notes.md").read_text(),
+            source_text(transcript, start, end) + "\n" + evidence,
+            label="clip-content",
+            image_validator=lambda text: validate_image_references(text, output_path, allowed),
+        )
+        (output_path / "notes.md").write_text(notes)
+        write_json(
+            output_path / "metrics.json",
+            {
+                **runner.metrics(),
+                "wall_seconds_this_invocation": time.monotonic() - started,
+                "cached_calls_before_invocation": cached,
+            },
+        )
         write_json(output_path / "status.json", {"status": "generated_awaiting_source_review"})
     except Exception as exc:
         write_json(output_path / "status.json", {"status": "failed", "error": str(exc)})

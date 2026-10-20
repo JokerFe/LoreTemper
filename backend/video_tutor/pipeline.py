@@ -534,6 +534,10 @@ class Pipeline:
             [outline, self.warnings, digests.get(self.settings.text_model), prompt("overview")],
             overview,
         )
+        thematic_summary = None
+        if self.settings.learning_quality == "joker-ui-v2":
+            from .note_quality import summarize_local
+            thematic_summary = summarize_local(self, chapters, transcript, frames)
         self.llm.unload(self.settings.text_model)
         self.stage("validate")
         doc = {
@@ -563,6 +567,10 @@ class Pipeline:
                 "prompts": {p: db.digest(prompt(p)) for p in ("vision", "chapter", "overview")},
             },
         }
+        if thematic_summary is not None:
+            doc['summary_markdown'] = thematic_summary
+            doc['provenance']['note_quality_profile'] = self.settings.learning_quality
+            doc['provenance']['source_review'] = 'requires_independent_source_review'
         validate_refs(doc, all_ids)
         self.check()
         previous = db.latest_document(self.id)

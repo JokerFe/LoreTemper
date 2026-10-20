@@ -36,6 +36,11 @@ def source_text(transcript, start, end):
 
 def valid_response(label, text):
     """An empty structured gap audit is valid even below the prose length floor."""
+    if label.startswith(("rules-", "capability-map-")) or "-coverage" in label or label.endswith("-inventory"):
+        try:
+            return isinstance(json.loads(text.strip().removeprefix("```json\n").removesuffix("```")), dict)
+        except (ValueError, TypeError):
+            return False
     if label == "visual-gap-audit":
         value = text.strip()
         if value.startswith("```json\n") and value.endswith("```"):

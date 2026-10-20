@@ -17,6 +17,7 @@ from .media import EXTENSIONS, probe
 
 
 class StudyInput(BaseModel):
+    quality_profile: Literal["legacy", "joker-ui-v2"] = "joker-ui-v2"
     paths: list[str] = Field(min_length=1, max_length=2000)
     output_directory: str = Field(min_length=1)
     provider: Literal["ollama", "codex"] = "codex"
@@ -207,6 +208,7 @@ def enqueue(body):
     settings = load_settings()
     config = settings.model_dump()
     config.update(
+        learning_quality=body.quality_profile,
         analysis_provider=body.provider,
         codex_model=body.model,
         codex_reasoning=body.reasoning,

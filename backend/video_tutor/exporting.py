@@ -109,6 +109,23 @@ def export_document(run_id, doc, folder, version=1):
     if doc.get("summary_markdown"):
         detailed = {k: v for k, v in doc.items() if k != "summary_markdown"}
         atomic_write(folder / "detailed-records.md", markdown(detailed))
+    quality_folder = folder / 'quality'
+    from .config import data_dir
+    run_folder = data_dir() / 'assets' / doc['asset_id'] / 'runs' / run_id
+    for root in (run_folder/'study', run_folder/'note-quality'):
+        if root.exists():
+            for report in root.rglob('*quality.json'):
+                destination = quality_folder / root.name / report.relative_to(root)
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(report, destination)
+            for report in root.rglob('*inventory.json'):
+                destination = quality_folder / root.name / report.relative_to(root)
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(report, destination)
+            for report in root.rglob('*coverage*.json'):
+                destination = quality_folder / root.name / report.relative_to(root)
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(report, destination)
     md = markdown(doc)
     atomic_write(folder / "document.md", md)
     renderer = MarkdownIt("commonmark", {"html": False, "linkify": False}).enable("table")

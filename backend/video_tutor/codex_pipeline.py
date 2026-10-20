@@ -75,6 +75,9 @@ def process_codex(p, asset, media, source, transcript, frames, sampling, start, 
             "end_ms": end,
         },
     )
+    from .learning_quality import PROFILE, NOTE_POLICY, finalize_notes
+
+    quality_enabled = p.settings.learning_quality == PROFILE
     runners, notes, selected = [], [], {}
     spans = list(range(start, end, 1200000))
     try:
@@ -124,6 +127,19 @@ def process_codex(p, asset, media, source, transcript, frames, sampling, start, 
                 selection = folder / "selected-frames.json"
             local = json.loads(selection.read_text())
             validate_image_references(revised, folder, {f["id"] for f in local})
+            if quality_enabled:
+                from .thematic_study import compact_speech
+
+                evidence_cards = (
+                    (folder / "evidence-cards.md").read_text() if (folder / "evidence-cards.md").exists() else ""
+                )
+                revised, _ = finalize_notes(
+                    runner,
+                    revised,
+                    compact_speech(transcript, a, b) + "\n" + evidence_cards + "\n" + repairs,
+                    label="clip-content",
+                    image_validator=lambda md: validate_image_references(md, folder, {f["id"] for f in local}),
+                )
             atomic_write(folder / "notes-revised.md", revised)
             for frame in local:
                 selected[frame["id"]] = frame
@@ -163,7 +179,12 @@ def process_codex(p, asset, media, source, transcript, frames, sampling, start, 
 只输出主题总结正文。\n"""
                     + "\n\n".join(group)
                 )
-                reduced.append(synthesis.call(f"course-synthesis-{level}-{index}", prompt))
+                draft = synthesis.call(
+                    f"course-synthesis-{level}-{index}", prompt + (NOTE_POLICY if quality_enabled else "")
+                )
+                if quality_enabled:
+                    draft, _ = finalize_notes(synthesis, draft, "\n\n".join(group), label=f"course-{level}-{index}")
+                reduced.append(draft)
             notes = reduced
             level += 1
         summary = notes[0]
@@ -205,6 +226,7 @@ def process_codex(p, asset, media, source, transcript, frames, sampling, start, 
                 "settings": p.settings.model_dump(),
                 "run_options": p.options,
                 "pipeline_version": "codex-thematic-v1",
+                "note_quality_profile": p.settings.learning_quality,
                 "started_at": started,
                 "review_status": "generated_awaiting_source_review",
                 "skill_generated": False,

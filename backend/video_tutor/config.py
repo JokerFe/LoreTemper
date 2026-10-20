@@ -13,6 +13,7 @@ class Settings(BaseModel):
     schema_version: int = 1
     directories: list[str] = []
     selected_files: list[str] = []
+    learning_quality: Literal["legacy", "joker-ui-v2"] = "legacy"
     analysis_provider: Literal["ollama", "codex"] = "ollama"
     codex_model: str = "gpt-6.1-sol"
     codex_reasoning: str = "medium"

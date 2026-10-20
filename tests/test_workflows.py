@@ -120,8 +120,10 @@ def test_chain_waits_for_all_studies_and_freezes_handoff(tmp_path, monkeypatch):
     setup(monkeypatch, video, note, tmp_path)
     submit(WorkflowInput(mode="combined", request_id="wf_chain"))
     monkeypatch.setattr("video_tutor.workflows.enqueue", lambda body: {"batch_id": body.request_id})
+
     def job():
         return db.one("SELECT * FROM workflows WHERE id=?", ("wf_chain",))
+
     tick(job())
     assert job()["status"] == "learning"
     tick(job())
@@ -152,6 +154,8 @@ def test_chain_waits_for_all_studies_and_freezes_handoff(tmp_path, monkeypatch):
     def generate(job, config, notes):
         calls.append(notes)
         assert len(notes) == 1 and "判断方法与条件" in Path(notes[0]["path"]).read_text()
+        assert notes[0]["source_identity"] == "v_chain"
+        assert notes[0]["review_status"] == "generated_awaiting_source_review"
         return {"skill_file": "/output/SKILL.md"}
 
     monkeypatch.setattr("video_tutor.workflows.generate_skill", generate)
@@ -177,6 +181,8 @@ def test_skill_package_structure_provenance_and_source_changes(tmp_path, monkeyp
     monkeypatch.setattr("video_tutor.workflows.TextRunner", Runner)
     job = db.one("SELECT * FROM workflows WHERE id=?", ("wf_skill",))
     config = json.loads(job["config_json"])
+    # An already-queued legacy job retains its original two-reference builder.
+    config.pop("quality_profile", None)
     result = generate_skill(job, config, config["notes"])
     package = Path(result["skill_file"]).parent
     assert package.joinpath("references/principles.md").exists()

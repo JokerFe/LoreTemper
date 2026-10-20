@@ -45,7 +45,7 @@ def estimate(duration_ms, provider, model, tier="default", reasoning="medium"):
         "pricing_source": PRICING_SOURCE,
         "pricing_checked": PRICING_CHECKED,
         "basis": "7门课程855分钟的调用回执，按时长加权；输入包含缓存，输出包含推理",
-        "caveat": "倍率仅比较相同token结构的API等值费用，不代表订阅额度。切换模型或思考档位后的token变化尚未实测；主对话整理及重试可能增加消耗。"
+        "caveat": "倍率仅比较相同token结构的API等值费用，不代表订阅额度。切换模型或思考档位后的token变化尚未实测；主对话整理及重试可能增加消耗。新版知识覆盖核对与修订另计，历史样本不是新版总价。"
         if provider == "codex"
         else "Ollama在本机运行，无模型API费用；电费、设备成本和本地token未估算。",
     }

@@ -62,6 +62,7 @@ type Resolved = {
   videos: { name: string; duration_ms: number }[];
   notes: { name: string; path: string; chars: number }[];
   errors: { path: string; error: string }[];
+  quality_profile?: string;
   estimates: { study?: Estimate; skill?: Estimate };
 };
 type Job = {
@@ -72,7 +73,16 @@ type Job = {
   error?: string;
   created_at: number;
   config: Resolved;
-  result: { skill_file?: string; source_count?: number };
+  result: {
+    skill_file?: string;
+    source_count?: number;
+    generation_report?: {
+      rule_count: number;
+      capability_count: number;
+      source_count: number;
+      profile: string;
+    } | null;
+  };
   skill_usage?: {
     usage: { input_tokens?: number; output_tokens?: number };
     api_equivalent_usd?: number | null;
@@ -483,6 +493,9 @@ export function WorkflowsPage({
           <div className="eyebrow">LEARN. DISTILL. REUSE.</div>
           <h1>从视频到知识，从知识到 Skill。</h1>
           <p>两步独立配置，也可以连起来一次完成。</p>
+          <p className="analysis-caption">
+            按 Joker UI 方法：主题知识 → 条件规则 → 能力指南 → 来源与覆盖校验。
+          </p>
         </div>
         <span className="analysis-local">
           <WandSparkles size={15} />
@@ -814,7 +827,12 @@ export function WorkflowsPage({
                 ))}
                 {studyEstimate && (
                   <div className="workflow-cost">
-                    <b>视频学习预估</b>
+                    <b>视频学习基础用量</b>
+                    {resolved.quality_profile && (
+                      <small>
+                        新增的知识覆盖核对与修订另计，暂无新版实测基准。
+                      </small>
+                    )}
                     <p>
                       {count(studyEstimate.total_tokens)} token ·{" "}
                       {money(studyEstimate.api_equivalent_usd)}
@@ -910,11 +928,15 @@ export function WorkflowsPage({
                 {job.error ||
                   (job.stage.startsWith("extract:")
                     ? "正在从学习笔记提炼知识 · " + job.stage.slice(8)
-                    : job.stage === "synthesize_skill"
-                      ? "正在编写 Skill"
-                      : job.stage === "complete"
-                        ? "已完成生成"
-                        : statusNames[job.status])}
+                    : job.stage === "capability_mapping"
+                      ? "正在建立能力路由与规则覆盖映射"
+                      : job.stage.startsWith("capability:")
+                        ? "正在融合能力指南并核对条件 · " + job.stage.slice(11)
+                        : job.stage === "synthesize_skill"
+                          ? "正在编写 Skill"
+                          : job.stage === "complete"
+                            ? "已完成生成"
+                            : statusNames[job.status])}
               </p>
               {job.items.map((i) => (
                 <p key={i.id}>
@@ -939,6 +961,15 @@ export function WorkflowsPage({
                 <div className="workflow-skill-result">
                   <Sparkles size={15} />
                   <b>Skill 已生成 · 待验证</b>
+                  {job.result.generation_report && (
+                    <small>
+                      保留 {job.result.generation_report.rule_count}{" "}
+                      条有条件规则，形成{" "}
+                      {job.result.generation_report.capability_count}{" "}
+                      个能力模块；覆盖{" "}
+                      {job.result.generation_report.source_count} 份来源。
+                    </small>
+                  )}
                   <code>{job.result.skill_file}</code>
                   <small>
                     结构检查已通过；实际任务效果尚未验证，未自动安装。

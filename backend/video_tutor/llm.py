@@ -57,7 +57,7 @@ def constrained_schema(schema, evidence_ids, bounds=None):
                 # indefinitely until Ollama exhausts num_predict.
                 if prop.get("type") == "array":
                     prop["maxItems"] = 24 if name == "visible_texts" else 16
-                if prop.get("type") == "string":
+                if prop.get("type") == "string" and name not in ("content", "markdown"):
                     prop["maxLength"] = 120 if name == "title" else 800
                 if allowed and len(allowed) <= 128:
                     if name in ("evidence_ids", "frame_ids", "summary_evidence_ids"):
@@ -123,7 +123,7 @@ class LocalLLM:
         self.loaded = set()
         self.info = {}
 
-    def chat(self, model, schema, system, payload, frames=None):
+    def chat(self, model, schema, system, payload, frames=None, context_size=None):
         self.check()
         if model not in self.info:
             self.info[model] = verify_model(self.settings, model, bool(frames))
@@ -157,7 +157,7 @@ class LocalLLM:
             "keep_alive": "5m",
             "options": {
                 "temperature": 0,
-                "num_ctx": self.settings.vision_num_ctx if frames else self.settings.text_num_ctx,
+                "num_ctx": context_size or (self.settings.vision_num_ctx if frames else self.settings.text_num_ctx),
                 "num_predict": 2048 if frames else 4096,
             },
         }

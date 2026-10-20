@@ -138,3 +138,32 @@ test("settings and narrow viewport", async ({ page }) => {
     ),
   ).toBeTruthy();
 });
+
+test("thematic notes keep operation records in a separate tab", async ({
+  page,
+}) => {
+  await mock(page, true);
+  await page.route("**/runs/r1/documents/latest", (route) =>
+    route.fulfill({
+      json: {
+        ...document,
+        body: {
+          ...document.body,
+          summary_markdown: "## 判断依据\n主题方法总结",
+          notes_html: "<h2>判断依据</h2><p>主题方法总结</p>",
+        },
+      },
+    }),
+  );
+  await page.goto("/");
+  await page.getByRole("button", { name: "设置教程", exact: true }).click();
+  await expect(page.getByText("主题方法总结", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("将端口输入框设置为 8080", { exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "详细查证", exact: true }).click();
+  await expect(
+    page.getByText("将端口输入框设置为 8080", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("主题方法总结", { exact: true })).toHaveCount(0);
+});

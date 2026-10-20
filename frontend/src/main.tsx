@@ -70,6 +70,8 @@ const stages: Dict = {
   select_frames: "筛选画面",
   analyze_frames: "理解画面",
   thematic_study: "按主题取证",
+  knowledge_inventory: "建立核心知识清单",
+  thematic_summary: "融合主题并核对内容覆盖",
   fuse: "整理操作步骤",
   summarize: "生成学习笔记",
   validate: "核对证据",
@@ -1016,6 +1018,9 @@ function Detail({ asset, onBack, action, notify, fail }: any) {
           <div className="tabs">
             {[
               ["notes", "图文笔记", BookOpen],
+              ...(body?.summary_markdown && body?.chapters?.length
+                ? [["records", "详细查证", FileText]]
+                : []),
               ["transcript", "完整字幕", FileText],
               ["frames", "截图证据", Images],
               ["activity", "处理记录", Clock3],
@@ -1125,13 +1130,16 @@ function Detail({ asset, onBack, action, notify, fail }: any) {
                     </section>
                   ),
               )}
-              {body.notes_html && (
+              {tab === "notes" && body.notes_html && (
                 <section
                   className="thematic-content"
                   dangerouslySetInnerHTML={{ __html: body.notes_html }}
                 />
               )}
-              {body.chapters.map((c, ci) => (
+              {(body.summary_markdown && tab !== "records"
+                ? []
+                : body.chapters
+              ).map((c, ci) => (
                 <section className="chapter" key={ci}>
                   <h2>
                     <span>{String(ci + 1).padStart(2, "0")}</span>
