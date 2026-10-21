@@ -46,6 +46,16 @@ test("independent and combined workflows preview concrete automatic configuratio
           body.mode === "skill"
             ? [{ name: "notes.md", path: "/notes/notes.md", chars: 1000 }]
             : [],
+        previous_notes: body.include_previous_notes
+          ? [
+              {
+                name: "旧课笔记",
+                title: "旧课笔记",
+                path: "/output/old/notes.md",
+                entry_id: "v_old/r_old-v1-sha",
+              },
+            ]
+          : [],
         errors: [],
         estimates: {
           study:
@@ -114,10 +124,16 @@ test("independent and combined workflows preview concrete automatic configuratio
     fullPage: true,
   });
   await page.getByLabel("Skill 用途").fill("仅指导课程中覆盖的图标设计");
+  await page.getByLabel("批次名称").fill("第二批条件补充");
+  await page.getByRole("checkbox", { name: /补充到已有学习内容/ }).check();
   await expect(
     page.getByRole("button", { name: "开始学习并生成 Skill", exact: true }),
   ).toBeDisabled();
   await page.getByRole("button", { name: "自动配置并预览" }).click();
+  await page.getByText("查看本次输入清单", { exact: true }).click();
+  await expect(
+    page.getByText("历史批次：旧课笔记 · /output/old/notes.md"),
+  ).toBeVisible();
   await page
     .getByRole("button", { name: "开始学习并生成 Skill", exact: true })
     .click();
@@ -127,6 +143,9 @@ test("independent and combined workflows preview concrete automatic configuratio
     study: { model: "runtime-model" },
     skill: { model: "another-model" },
     skill_goal: "仅指导课程中覆盖的图标设计",
+    batch_label: "第二批条件补充",
+    include_previous_notes: true,
+    previous_entry_ids: ["v_old/r_old-v1-sha"],
   });
   await page.setViewportSize({ width: 600, height: 900 });
   await page.screenshot({

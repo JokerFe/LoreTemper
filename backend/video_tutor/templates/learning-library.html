@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <title>学习资料库 · 知炼</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #243b32;
+        --muted: #52685d;
+        --line: #dce4dc;
+        --green: #2a6347;
+        --paper: #f6f8f4;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font:
+          16px/1.65 system-ui,
+          -apple-system,
+          sans-serif;
+      }
+      main {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 48px 28px;
+      }
+      header {
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 28px;
+      }
+      header small {
+        letter-spacing: 0.12em;
+        color: var(--green);
+      }
+      h1 {
+        font-size: 32px;
+        line-height: 1.3;
+        margin: 8px 0 12px;
+      }
+      h2 {
+        font-size: 20px;
+        margin: 0;
+      }
+      p {
+        margin: 8px 0;
+      }
+      a {
+        color: var(--green);
+        text-underline-offset: 4px;
+      }
+      a:focus-visible,
+      button:focus-visible,
+      input:focus-visible,
+      select:focus-visible {
+        outline: 3px solid #599b74;
+        outline-offset: 3px;
+      }
+      .muted {
+        color: var(--muted);
+        font-size: 14px;
+      }
+      .controls {
+        display: grid;
+        grid-template-columns: 1fr 240px;
+        gap: 16px;
+        margin: 28px 0 14px;
+      }
+      label {
+        display: block;
+        font-size: 14px;
+        font-weight: 600;
+      }
+      input,
+      select {
+        display: block;
+        width: 100%;
+        margin-top: 6px;
+        padding: 12px;
+        border: 1px solid #b7c6b9;
+        border-radius: 8px;
+        background: #fff;
+        color: var(--ink);
+        font: inherit;
+      }
+      #count {
+        margin-bottom: 20px;
+      }
+      article {
+        padding: 24px 0;
+        border-top: 1px solid var(--line);
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 20px;
+      }
+      .meta {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        color: var(--muted);
+        font-size: 13px;
+        margin-bottom: 8px;
+      }
+      .tag {
+        background: #e4eee4;
+        color: #355941;
+        padding: 2px 8px;
+        border-radius: 4px;
+      }
+      .actions {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-top: 12px;
+      }
+      .primary {
+        align-self: start;
+        padding: 8px 14px;
+        border-radius: 6px;
+        background: var(--green);
+        color: #fff;
+        text-decoration: none;
+        display: inline-block;
+        white-space: nowrap;
+      }
+      .excerpt {
+        white-space: pre-line;
+        overflow-wrap: anywhere;
+        font-size: 15px;
+        max-width: 750px;
+      }
+      .record-id {
+        overflow-wrap: anywhere;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      details {
+        margin: 24px 0;
+      }
+      summary {
+        cursor: pointer;
+      }
+      #batches {
+        padding-top: 12px;
+        display: grid;
+        gap: 12px;
+      }
+      .batch {
+        border-left: 3px solid var(--line);
+        padding-left: 16px;
+      }
+      .batch a {
+        margin-right: 16px;
+      }
+      .empty {
+        padding: 36px 0;
+      }
+      footer {
+        margin-top: 32px;
+        border-top: 1px solid var(--line);
+        padding-top: 16px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+      @media (max-width: 640px) {
+        main {
+          padding: 28px 18px;
+        }
+        h1 {
+          font-size: 27px;
+        }
+        .controls {
+          grid-template-columns: 1fr;
+        }
+        article {
+          grid-template-columns: 1fr;
+          gap: 8px;
+        }
+        .primary {
+          width: 100%;
+          text-align: center;
+        }
+        .actions {
+          gap: 16px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <small>LORETEMPER / LEARNING LIBRARY</small>
+        <h1>每一次学习，都有迹可循。</h1>
+        <p>
+          按批次找到视频笔记，按关键词回查知识。后续批次追加收录，历史版本与过程材料持续保留。
+        </p>
+        <p class="muted">
+          笔记为主题总结；原始讲解、截图和质量报告独立保存。自动检查不等于来源审阅。
+        </p>
+      </header>
+      <section class="controls" aria-label="查找笔记">
+        <label
+          >搜索标题、知识点或笔记正文<input
+            id="search"
+            type="search"
+            placeholder="例如：图标、视觉重量、留白"
+            autocomplete="off" /></label
+        ><label
+          >学习批次<select id="batch">
+            <option value="">全部批次</option>
+          </select></label
+        >
+      </section>
+      <p id="count" class="muted" role="status" aria-live="polite"></p>
+      <div id="notes"></div>
+      <details>
+        <summary>批次交接、知识去向与 Skill 结果</summary>
+        <div id="batches"></div>
+      </details>
+      <footer>
+        原视频保留在来源位置。历史课程保存原笔记副本和来源记录，图片及过程材料仍链接至原学习目录。
+        移动资料库时须一并保留原学习目录与相对路径；原视频按来源记录查找。
+      </footer>
+    </main>
+    <script id="library-data" type="application/json">
+      __LIBRARY_DATA__
+    </script>
+    <script>
+      const data = JSON.parse(
+        document.getElementById("library-data").textContent,
+      );
+      const search = document.getElementById("search"),
+        batchSelect = document.getElementById("batch"),
+        notes = document.getElementById("notes");
+      function node(tag, text, cls) {
+        const e = document.createElement(tag);
+        if (text !== undefined) e.textContent = text;
+        if (cls) e.className = cls;
+        return e;
+      }
+      function link(text, url, cls) {
+        const a = node("a", text, cls);
+        a.href = url;
+        return a;
+      }
+      const batches = [...data.batches].sort(
+        (a, b) =>
+          Number(b.status === "historical_import") -
+            Number(a.status === "historical_import") ||
+          (a.status === "historical_import" && b.status === "historical_import"
+            ? a.id.localeCompare(b.id)
+            : b.created_at - a.created_at),
+      );
+      for (const b of batches) {
+        const label =
+          b.status === "historical_import" ? `${b.id} · ${b.label}` : b.label;
+        const opt = node("option", label);
+        opt.value = b.id;
+        batchSelect.append(opt);
+        const row = node("div", undefined, "batch");
+        row.append(
+          node("b", label),
+          node(
+            "p",
+            `${b.entry_ids.length} 份本批笔记 + ${(b.inherited_entry_ids || []).length} 份历史笔记 · ${b.status === "historical_import" ? "历史笔记已收录，保留原审阅记录" : b.status === "complete" ? "流程完成，待验证" : b.status === "failed" ? "流程失败，已保留笔记" : "学习或生成中"}`,
+            "muted",
+          ),
+        );
+        if (b.error) row.append(node("p", b.error));
+        const base = "batches/" + encodeURIComponent(b.id) + "/";
+        row.append(link("批次记录", base + "batch.json"));
+        if (b.handoff_available)
+          row.append(link("交接清单", base + "process/handoff-manifest.md"));
+        if (b.result?.knowledge_destinations)
+          row.append(
+            link(
+              "知识点去向",
+              base +
+                "process/" +
+                encodeURIComponent(b.result.skill_name) +
+                "/references/coverage/knowledge-destinations.html",
+            ),
+          );
+        if (b.result?.skill_file)
+          row.append(
+            link(
+              "Skill 入口",
+              base +
+                "process/" +
+                encodeURIComponent(b.result.skill_name) +
+                "/SKILL.md",
+            ),
+          );
+        document.getElementById("batches").append(row);
+      }
+      function render() {
+        notes.replaceChildren();
+        const q = search.value.trim().toLocaleLowerCase(),
+          b = batches.find((x) => x.id === batchSelect.value);
+        const visible = [...data.entries]
+          .sort((a, b) => {
+            const group = (e) =>
+              batches.findIndex((b) => b.entry_ids.includes(e.entry_id));
+            return (
+              group(a) - group(b) ||
+              (a.kind === "historical_note" && b.kind === "historical_note"
+                ? a.title.localeCompare(b.title, "zh-CN", { numeric: true }) ||
+                  b.created_at - a.created_at
+                : b.created_at - a.created_at)
+            );
+          })
+          .filter(
+            (e) =>
+              (!b ||
+                [...b.entry_ids, ...(b.inherited_entry_ids || [])].includes(
+                  e.entry_id,
+                )) &&
+              (!q ||
+                (e.title + " " + e.search_text)
+                  .toLocaleLowerCase()
+                  .includes(q)),
+          );
+        document.getElementById("count").textContent =
+          `找到 ${visible.length} 份笔记 · 共 ${data.entries.length} 个版本 / ${data.batches.length} 个批次`;
+        for (const e of visible) {
+          const row = node("article"),
+            content = node("div"),
+            meta = node("div", undefined, "meta");
+          const labels = batches
+            .filter((b) => b.entry_ids.includes(e.entry_id))
+            .map((b) => b.label);
+          meta.append(
+            node("span", labels.join(" / ")),
+            node(
+              "span",
+              e.kind === "historical_note"
+                ? e.review_status === "full_coverage_key_evidence_reviewed"
+                  ? "原记录：已完成关键证据审阅"
+                  : `原审阅状态：${e.review_status}`
+                : "待来源审阅",
+              "tag",
+            ),
+            node(
+              "span",
+              `${e.knowledge_count == null ? "历史课程笔记" : e.knowledge_count + " 个知识记录"} · v${e.document_version}`,
+            ),
+          );
+          content.append(meta, node("h2", e.title));
+          let excerpt = e.search_text
+            .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
+            .replace(/^#{1,6}\s*/gm, "")
+            .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+            .replace(/[*`]/g, "")
+            .replace(/\s+/g, " ")
+            .trim();
+          let pos = q ? excerpt.toLocaleLowerCase().indexOf(q) : -1;
+          const start = pos > 80 ? pos - 80 : 0;
+          content.append(
+            node(
+              "p",
+              (start ? "…" : "") +
+                excerpt.slice(start, start + 260) +
+                (excerpt.length > start + 260 ? "…" : ""),
+              "excerpt",
+            ),
+          );
+          const actions = node("div", undefined, "actions");
+          actions.append(link("Markdown", e.markdown_url));
+          if (e.knowledge_url)
+            actions.append(link("知识清单", e.knowledge_url));
+          if (e.original_note_url)
+            actions.append(link("原笔记", e.original_note_url));
+          if (e.source_url)
+            actions.append(link("视频来源与审阅记录", e.source_url));
+          actions.append(
+            link(
+              e.kind === "historical_note" ? "收录文件清单" : "全部文件清单",
+              e.manifest_url,
+            ),
+          );
+          content.append(actions, node("p", e.run_id, "record-id"));
+          row.append(content, link("阅读笔记 →", e.note_url, "primary"));
+          notes.append(row);
+        }
+        if (!visible.length)
+          notes.append(
+            node(
+              "p",
+              "没有匹配的笔记。试试其他关键词或选择全部批次。",
+              "empty",
+            ),
+          );
+      }
+      search.addEventListener("input", render);
+      batchSelect.addEventListener("change", render);
+      render();
+    </script>
+  </body>
+</html>

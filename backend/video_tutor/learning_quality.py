@@ -122,8 +122,11 @@ JSON格式：{"items":[{"id":"K001","topic":"主题","core":"核心思想","basi
             + """逐项比较核心知识清单与主笔记，检查思想、依据、方法、条件、必要案例有无实质遗漏。
 只输出JSON：{"covered_ids":["K001"],"missing_ids":[],"unsupported_claims":[],"conflicts":[]}。
 每个真实ID必须且只能在covered_ids或missing_ids出现。例值泛化、把建议写成实证、无来源的图像细节列入unsupported_claims。conflicts只记录未解释或未保留的冲突，已说明条件分支的差异不算缺陷。
+判断“无来源”须同时核对后附完整来源；核心知识清单不是全部证据，不得因清单没有重复记录时间、证据边界或案例就误判。来源中的猜测和待核查不能升级为已确认事实。
 清单：\n"""
             + json.dumps(items, ensure_ascii=False)
+            + "\n完整来源（含证据边界）：\n"
+            + source
             + "\n主笔记：\n"
             + notes
         )

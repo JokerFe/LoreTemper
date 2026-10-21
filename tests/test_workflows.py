@@ -141,6 +141,7 @@ def test_chain_waits_for_all_studies_and_freezes_handoff(tmp_path, monkeypatch):
     assert job()["status"] == "learning"
     db.execute("UPDATE runs SET status='succeeded_with_warnings' WHERE id=?", (run,))
     document = {
+        "asset_id": "v_chain", "frames": {}, "transcript": [], "chapters": [], "provenance": {},
         "overview": {"title": "course", "summary": "核心思想"},
         "source_title": "course",
         "duration_ms": 60000,

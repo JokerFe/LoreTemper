@@ -96,7 +96,7 @@ def markdown(doc):
     return "\n".join(lines) + "\n"
 
 
-def export_document(run_id, doc, folder, version=1):
+def export_document(run_id, doc, folder, version=1, *, register=True):
     folder.mkdir(parents=True, exist_ok=True)
     images = folder / "images"
     images.mkdir(exist_ok=True)
@@ -145,4 +145,4 @@ def export_document(run_id, doc, folder, version=1):
             if f.is_file() and f.suffix not in (".zip", ".tmp"):
                 z.write(f, str(f.relative_to(folder)))
     zip_path.with_suffix(".tmp").replace(zip_path)
-    return {p.name: db.add_artifact(run_id, p, "export") for p in folder.iterdir() if p.is_file()}
+    return {p.name: db.add_artifact(run_id, p, "export") for p in folder.iterdir() if p.is_file()} if register else {}

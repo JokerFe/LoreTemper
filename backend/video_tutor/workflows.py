@@ -39,6 +39,9 @@ class WorkflowInput(BaseModel):
     video_paths: list[str] = Field(default_factory=list, max_length=2000)
     note_paths: list[str] = Field(default_factory=list, max_length=2000)
     auto_input: bool = True
+    batch_label: str = Field(default="", max_length=120)
+    include_previous_notes: bool = False
+    previous_entry_ids: list[str] | None = Field(default=None, max_length=2000)
     output_directory: str = ""
     study: StageConfig = Field(default_factory=StageConfig)
     skill: StageConfig = Field(default_factory=StageConfig)
@@ -53,7 +56,8 @@ def init():
 
 
 def catalog_notes():
-    catalog = json.loads((ROOT / "learning/catalog.json").read_text())
+    catalog_path = ROOT / "learning/catalog.json"
+    catalog = json.loads(catalog_path.read_text()) if catalog_path.exists() else {"batches": []}
     paths = []
     for batch in catalog.get("batches", []):
         for video in batch.get("videos", []):
@@ -176,7 +180,8 @@ def note_files(paths, exclude=None):
         if note["sha256"] not in seen:
             seen.add(note["sha256"])
             unique.append(note)
-    catalog = json.loads((ROOT / "learning/catalog.json").read_text())
+    catalog_path = ROOT / "learning/catalog.json"
+    catalog = json.loads(catalog_path.read_text()) if catalog_path.exists() else {"batches": []}
     indexed = {}
     for batch in catalog.get("batches", []):
         for video in batch.get("videos", []):
@@ -209,6 +214,10 @@ def resolve(body):
     catalogs = {}
     result = {
         "quality_profile": PROFILE,
+        "handoff_version": 1,
+        "batch_label": body.batch_label.strip(),
+        "include_previous_notes": body.include_previous_notes,
+        "previous_notes": [],
         "mode": body.mode,
         "output_directory": str(output),
         "video_paths": body.video_paths,
@@ -235,6 +244,9 @@ def resolve(body):
             "；这是基础学习流程的历史用量，新版内容覆盖与修订检查另计，尚无实测基准"
         )
         result["estimates"]["study"]["quality_profile"] = PROFILE
+    if body.mode == "combined" and body.include_previous_notes:
+        from .study_library import previous_notes
+        result["previous_notes"] = previous_notes(output, body.previous_entry_ids)
     if body.mode != "study":
         result["skill"] = resolve_stage(body.skill, False, catalogs)
         paths = body.note_paths or (defaults["note_paths"] if body.auto_input and body.mode == "skill" else [])
@@ -483,6 +495,14 @@ def generate_skill(job, config, notes):
         missing_assets, asset_records = [], []
         import shutil
 
+        if note.get("snapshot_directory"):
+            # Keep the note's detailed-records links usable inside the portable Skill.
+            for name in ("images", "quality", "detailed-records.md", "document.html", "document.json", "transcript.srt", "provenance.json"):
+                origin = p.parent / name
+                if origin.is_dir():
+                    shutil.copytree(origin, source_folder / name, dirs_exist_ok=True)
+                elif origin.is_file():
+                    shutil.copy2(origin, source_folder / name)
         for target in re.findall(r"!\[[^\]]*\]\(([^)]+)\)", text):
             relative = Path(target)
             if (
@@ -599,6 +619,14 @@ def generate_skill(job, config, notes):
             + evidence
         )
         skill = runner.call("skill-entry", prompt).strip()
+    destination_report = None
+    if layered and config.get("handoff_version"):
+        from .knowledge_lineage import map_knowledge
+        update(ident, stage="knowledge_destinations")
+        destination_report = map_knowledge(runner, package, notes, structured_rules, config)
+        generation_report["knowledge_destinations"] = destination_report["counts"]
+        generation_report["missing_knowledge_inventories"] = destination_report["missing_inventories"]
+        write_json(package / "references/coverage/generation-report.json", generation_report)
     skill = skill.strip()
     skill = re.sub(r"^```(?:markdown|md)?\s*\n", "", skill)
     skill = re.sub(r"\n```\s*$", "", skill)
@@ -673,6 +701,9 @@ def generate_skill(job, config, notes):
     shutil.copy2(root / "usage.json", destination.parent / "usage.json")
     manifest = {
         "skill_file": str(destination / "SKILL.md"),
+        "skill_name": config["skill_name"],
+        "knowledge_destinations": str(destination / "references/coverage/knowledge-destinations.html") if destination_report is not None else None,
+        "handoff_manifest": str(root / "handoff-manifest.json") if (root / "handoff-manifest.json").exists() else None,
         "source_count": len(notes),
         "status": "generated_awaiting_validation",
         "quality_profile": config.get("quality_profile", "legacy"),
@@ -687,7 +718,7 @@ def generate_skill(job, config, notes):
     return manifest
 
 
-def tick(job):
+def _tick(job):
     config = json.loads(job["config_json"])
     check(job["id"])
     if config["mode"] != "skill":
@@ -710,6 +741,10 @@ def tick(job):
             "SELECT i.*,r.status AS run_status FROM study_batch_items i LEFT JOIN runs r ON r.id=i.run_id WHERE batch_id=?",
             (batch,),
         )
+        retained_notes, library_index = [], None
+        if config.get("handoff_version"):
+            from .study_library import collect_completed
+            retained_notes, library_index = collect_completed(job, config, items)
         if any(i["status"] == "failed" or i["run_status"] == "failed" for i in items):
             raise ValueError("视频学习失败，请在资料库查看失败原因；修复后可重试此流程")
         if any(i["status"] == "cancelled" or i["run_status"] == "cancelled" for i in items):
@@ -718,43 +753,52 @@ def tick(job):
             update(job["id"], status="learning", stage="learning")
             return
         if config["mode"] == "study":
-            update(job["id"], status="succeeded", stage="complete", result_json=db.dumps({"batch_id": batch}))
+            update(job["id"], status="succeeded", stage="complete", result_json=db.dumps({"batch_id": batch, "library_index": library_index}))
             return
-        # Freeze handoff once: retry reuses exactly the same notes and model.
-        handoff = data_dir() / "workflows" / job["id"] / "handoff.json"
-        if handoff.exists():
-            notes = json.loads(handoff.read_text())
+        if config.get("handoff_version"):
+            from .study_library import freeze_handoff
+            # New versions replace prior input for that video only in this synthesis.
+            # The library retains every prior note and generated Skill package.
+            by_source = {n["source_identity"]: n for n in config.get("previous_notes", [])}
+            by_source.update({n["source_identity"]: n for n in config["notes"]})
+            by_source.update({n["source_identity"]: n for n in retained_notes})
+            notes = freeze_handoff(job, config, list(by_source.values()))
         else:
-            notes = list(config["notes"])
-            for item in items:
-                document = db.latest_document(item["run_id"])
-                if not document:
-                    raise ValueError("学习结果缺少笔记，无法衔接Skill生成")
-                from .exporting import markdown
+            # Freeze handoff once: retry reuses exactly the same notes and model.
+            handoff = data_dir() / "workflows" / job["id"] / "handoff.json"
+            if handoff.exists():
+                notes = json.loads(handoff.read_text())
+            else:
+                notes = list(config["notes"])
+                for item in items:
+                    document = db.latest_document(item["run_id"])
+                    if not document:
+                        raise ValueError("学习结果缺少笔记，无法衔接Skill生成")
+                    from .exporting import markdown
 
-                path = data_dir() / "workflows" / job["id"] / "handoff" / item["run_id"] / "notes.md"
-                atomic_write(path, markdown(document["body"]))
-                import shutil
+                    path = data_dir() / "workflows" / job["id"] / "handoff" / item["run_id"] / "notes.md"
+                    atomic_write(path, markdown(document["body"]))
+                    import shutil
 
-                for fid, frame in document["body"].get("frames", {}).items():
-                    artifact = db.one("SELECT path FROM artifacts WHERE id=?", (frame["artifact_id"],))
-                    if artifact:
-                        image = data_dir() / artifact["path"]
-                        if image.is_file():
-                            (path.parent / "images").mkdir(exist_ok=True)
-                            shutil.copy2(image, path.parent / "images" / (fid + ".jpg"))
-                notes.append(
-                    {
-                        "path": str(path),
-                        "name": path.name,
-                        "chars": len(path.read_text()),
-                        "sha256": db.file_sha(path),
-                        "source_identity": document["body"].get("asset_id")
-                        or db.one("SELECT asset_id FROM runs WHERE id=?", (item["run_id"],))["asset_id"],
-                        "review_status": "generated_awaiting_source_review",
-                    }
-                )
-            write_json(handoff, notes)
+                    for fid, frame in document["body"].get("frames", {}).items():
+                        artifact = db.one("SELECT path FROM artifacts WHERE id=?", (frame["artifact_id"],))
+                        if artifact:
+                            image = data_dir() / artifact["path"]
+                            if image.is_file():
+                                (path.parent / "images").mkdir(exist_ok=True)
+                                shutil.copy2(image, path.parent / "images" / (fid + ".jpg"))
+                    notes.append(
+                        {
+                            "path": str(path),
+                            "name": path.name,
+                            "chars": len(path.read_text()),
+                            "sha256": db.file_sha(path),
+                            "source_identity": document["body"].get("asset_id")
+                            or db.one("SELECT asset_id FROM runs WHERE id=?", (item["run_id"],))["asset_id"],
+                            "review_status": "generated_awaiting_source_review",
+                        }
+                    )
+                write_json(handoff, notes)
     else:
         notes = config["notes"]
     stage = config["skill"]
@@ -778,6 +822,23 @@ def tick(job):
     result = generate_skill(job, config, notes)
     check(job["id"])
     update(job["id"], status="succeeded", stage="complete", result_json=db.dumps(result))
+
+
+def tick(job):
+    config = json.loads(job["config_json"])
+    try:
+        _tick(job)
+    except Exception as exc:
+        if config.get("handoff_version"):
+            from .study_library import archive_workflow
+            archive_workflow(job, config, error=exc)
+        raise
+    current = db.one("SELECT * FROM workflows WHERE id=?", (job["id"],))
+    if config.get("handoff_version") and current and current["status"] == "succeeded":
+        from .study_library import archive_workflow
+        result = json.loads(current["result_json"] or "{}")
+        result["library_index"] = archive_workflow(current, config, result=result)
+        update(job["id"], result_json=db.dumps(result))
 
 
 def run_workflow_worker():

@@ -81,6 +81,18 @@ def test_unresolved_core_gaps_are_not_published_as_complete(tmp_path):
     assert len([label for label in runner.labels if label.endswith("-revision")]) == 1
 
 
+def test_coverage_receives_source_evidence_not_just_reduced_inventory(tmp_path):
+    marker = "来源边界：00:23.200以后的讲解尚未核查"
+
+    class Runner(NoteRunner):
+        def call(self, label, prompt):
+            if "-coverage" in label:
+                assert marker in prompt.split("\n主笔记：\n")[0]
+            return super().call(label, prompt)
+
+    finalize_notes(Runner(tmp_path / "quality"), "原稿", rule()["quote"] + "。" + marker)
+
+
 def test_rule_quote_and_timestamp_must_exist_and_audit_cannot_hide_ids(tmp_path):
     class Runner:
         def call(self, *_):

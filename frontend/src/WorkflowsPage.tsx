@@ -39,6 +39,8 @@ type Config = {
   video_paths: string[];
   note_paths: string[];
   auto_input: boolean;
+  batch_label: string;
+  include_previous_notes: boolean;
   output_directory: string;
   study: Stage;
   skill: Stage;
@@ -63,6 +65,12 @@ type Resolved = {
   notes: { name: string; path: string; chars: number }[];
   errors: { path: string; error: string }[];
   quality_profile?: string;
+  previous_notes?: {
+    path: string;
+    title?: string;
+    name: string;
+    entry_id: string;
+  }[];
   estimates: { study?: Estimate; skill?: Estimate };
 };
 type Job = {
@@ -75,6 +83,9 @@ type Job = {
   config: Resolved;
   result: {
     skill_file?: string;
+    library_index?: string;
+    handoff_manifest?: string;
+    knowledge_destinations?: string;
     source_count?: number;
     generation_report?: {
       rule_count: number;
@@ -357,6 +368,8 @@ export function WorkflowsPage({
     video_paths: [],
     note_paths: [],
     auto_input: true,
+    batch_label: "",
+    include_previous_notes: false,
     output_directory: "",
     study: automatic(),
     skill: automatic(),
@@ -458,6 +471,9 @@ export function WorkflowsPage({
       ...config,
       video_paths: resolved.video_paths,
       note_paths: resolved.note_paths,
+      previous_entry_ids: (resolved.previous_notes || []).map(
+        (n) => n.entry_id,
+      ),
       auto_input: false,
       output_directory: resolved.output_directory,
       study: resolved.study || config.study,
@@ -538,6 +554,33 @@ export function WorkflowsPage({
               <span>01</span>
               <h2>输入资料</h2>
             </div>
+            <label className="analysis-label">
+              批次名称
+              <input
+                value={config.batch_label}
+                maxLength={120}
+                placeholder="例如：第二批 · 布局与字体"
+                onChange={(e) => edit({ batch_label: e.target.value })}
+              />
+            </label>
+            {config.mode === "combined" && (
+              <label className="workflow-toggle">
+                <input
+                  type="checkbox"
+                  checked={config.include_previous_notes}
+                  onChange={(e) =>
+                    edit({ include_previous_notes: e.target.checked })
+                  }
+                />
+                <span>
+                  补充到已有学习内容
+                  <small>
+                    将同一输出目录已保留的视频笔记纳入本次 Skill
+                    综合。预览会列出范围；旧笔记与旧 Skill 保留独立版本。
+                  </small>
+                </span>
+              </label>
+            )}
             <label className="workflow-toggle">
               <input
                 type="checkbox"
@@ -799,7 +842,9 @@ export function WorkflowsPage({
                         {resolved.skill.provider} · {resolved.skill.model}
                       </span>
                       <small>
-                        {resolved.notes.length} 份已有笔记
+                        {resolved.notes.length +
+                          (resolved.previous_notes?.length || 0)}{" "}
+                        份已有笔记
                         {config.mode === "combined"
                           ? " + 本次学习结果自动衔接"
                           : ""}
@@ -815,6 +860,11 @@ export function WorkflowsPage({
                   <summary>查看本次输入清单</summary>
                   {resolved.video_paths.map((p) => (
                     <p key={p}>{p}</p>
+                  ))}
+                  {resolved.previous_notes?.map((n) => (
+                    <p key={n.path}>
+                      历史批次：{n.title || n.name} · {n.path}
+                    </p>
                   ))}
                   {resolved.note_paths.map((p) => (
                     <p key={p}>{p}</p>
@@ -928,15 +978,18 @@ export function WorkflowsPage({
                 {job.error ||
                   (job.stage.startsWith("extract:")
                     ? "正在从学习笔记提炼知识 · " + job.stage.slice(8)
-                    : job.stage === "capability_mapping"
-                      ? "正在建立能力路由与规则覆盖映射"
-                      : job.stage.startsWith("capability:")
-                        ? "正在融合能力指南并核对条件 · " + job.stage.slice(11)
-                        : job.stage === "synthesize_skill"
-                          ? "正在编写 Skill"
-                          : job.stage === "complete"
-                            ? "已完成生成"
-                            : statusNames[job.status])}
+                    : job.stage === "knowledge_destinations"
+                      ? "正在核对每个知识点的笔记、规则与能力去向"
+                      : job.stage === "capability_mapping"
+                        ? "正在建立能力路由与规则覆盖映射"
+                        : job.stage.startsWith("capability:")
+                          ? "正在融合能力指南并核对条件 · " +
+                            job.stage.slice(11)
+                          : job.stage === "synthesize_skill"
+                            ? "正在编写 Skill"
+                            : job.stage === "complete"
+                              ? "已完成生成"
+                              : statusNames[job.status])}
               </p>
               {job.items.map((i) => (
                 <p key={i.id}>
@@ -957,6 +1010,16 @@ export function WorkflowsPage({
                     : ""}
                 </p>
               )}
+              {job.result.library_index && (
+                <div className="workflow-skill-result">
+                  <BookOpen size={15} />
+                  <b>学习资料汇总</b>
+                  <code>{job.result.library_index}</code>
+                  <small>
+                    在本机浏览器打开，可按批次和笔记内容搜索；所有视频笔记与历史版本均保留。
+                  </small>
+                </div>
+              )}
               {job.result.skill_file && (
                 <div className="workflow-skill-result">
                   <Sparkles size={15} />
@@ -971,6 +1034,18 @@ export function WorkflowsPage({
                     </small>
                   )}
                   <code>{job.result.skill_file}</code>
+                  {job.result.knowledge_destinations && (
+                    <>
+                      <small>知识点去向表</small>
+                      <code>{job.result.knowledge_destinations}</code>
+                    </>
+                  )}
+                  {job.result.handoff_manifest && (
+                    <>
+                      <small>交接清单</small>
+                      <code>{job.result.handoff_manifest}</code>
+                    </>
+                  )}
                   <small>
                     结构检查已通过；实际任务效果尚未验证，未自动安装。
                   </small>

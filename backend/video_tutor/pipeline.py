@@ -268,8 +268,9 @@ class Pipeline:
                         self.check,
                     )
                     result = transcribe_window(part, prefix, self.settings, window_start + offset, duration, self.check)
-                    part.unlink(missing_ok=True)
-                    prefix.with_suffix(".json").unlink(missing_ok=True)
+                    if self.settings.learning_quality != "joker-ui-v2":
+                        part.unlink(missing_ok=True)
+                        prefix.with_suffix(".json").unlink(missing_ok=True)
                     return [t for t in result if t["end_ms"] > start and t["start_ms"] < end]
 
                 segment = self.unit(
@@ -288,7 +289,8 @@ class Pipeline:
                 )
                 transcript = merge_segments(transcript, segment)
             self.progress(len(positions), len(positions))
-            wav.unlink(missing_ok=True)
+            if self.settings.learning_quality != "joker-ui-v2":
+                wav.unlink(missing_ok=True)
             if not transcript:
                 self.warnings.append("未识别出可用语音，本次主要依据画面")
         else:
