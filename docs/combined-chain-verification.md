@@ -56,3 +56,13 @@
 已核对 121 个原笔记、HTML、完成及审阅文件的指纹未变，713 个本地链接有效，其中包含 352 个图片引用。浏览器逐篇打开 27 篇笔记，图片全部加载；原批次筛选数量正确，正文关键词 `0.5` 能找到线面性图标课，390px 页面无横向溢出或脚本错误。重复导入后仍为 30 个条目，未产生重复版本。报告位于验证目录的 `historical-import-verification.json`、`historical-browser-verification.json`。
 
 本次仅补录与检查阅读入口，没有重新学习原视频或重新生成 Skill。历史条目保留原审阅状态，未虚构新版知识清单或知识点去向；截图及完整过程材料仍位于原学习目录。
+
+
+## 按笔记目录拆分（2026-10-22）
+
+按用户明确的“以指定笔记输出目录为边界”修正汇总范围。上一节的 30 篇／6 批是拆分前的历史记录，当前已分为：
+
+- `learning/batches/learning-library/index.html`：只包含 `learning/batches` 中的 27 篇课程，保留 4 个原批次。
+- `work/combined-chain-validation-20261021-v2/output/learning-library/index.html`：只包含该输出目录下 `notes` 的 3 篇验证笔记，保留 2 个验证批次。
+
+拆分前的索引与记录备份在 `work/library-directory-separation-20261022/`。原笔记、审阅记录和原有快照指纹未变；两份索引中的 719 个本地引用均存在，验证报告为该备份目录下的 `verification.json`。今后同一笔记目录可跨批次追加，不同目录的补录会被拒绝；旧混合索引不会继续被静默复用。

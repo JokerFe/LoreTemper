@@ -27,13 +27,16 @@ from .study_library import (
     register_batch,
     verify_entry,
 )
+from .study_library import (
+    notes_directory as check_notes_directory,
+)
 
 
 def relative_url(path, directory):
     return quote(os.path.relpath(path, directory).replace(os.sep, "/"), safe="/")
 
 
-def prepare(catalog_path, project):
+def prepare(catalog_path, project, notes_directory):
     catalog = json.loads(catalog_path.read_text())
     prepared = []
     for batch in catalog["batches"]:
@@ -44,6 +47,8 @@ def prepare(catalog_path, project):
                 continue
             _safe_name(video["asset_id"])
             note = (project / video["reviewed_note"]).resolve()
+            if not note.is_relative_to(notes_directory):
+                continue
             status_path = (project / video["codex_study"]["status_file"]).resolve()
             status = json.loads(status_path.read_text())
             if status.get("status") != "completed":
@@ -141,11 +146,17 @@ def snapshot(root, project, catalog_path, batch, item):
     return entry
 
 
-def import_catalog(catalog_path, output, project=None):
+def import_catalog(catalog_path, output, project=None, notes_directory=None):
     catalog_path = Path(catalog_path).resolve()
     project = Path(project).resolve() if project else catalog_path.parent.parent
     root = library_root(Path(output).resolve())
-    prepared = prepare(catalog_path, project)  # Validate every course before modifying the index.
+    scope = Path(notes_directory).resolve() if notes_directory else catalog_path.parent / "batches"
+    if not scope.is_dir():
+        raise ValueError("笔记输出目录不存在：" + str(scope))
+    check_notes_directory(root, read_catalog(root), scope)
+    prepared = prepare(catalog_path, project, scope)  # Only import notes inside this directory.
+    if not prepared:
+        raise ValueError("所选笔记输出目录中没有已登记的主笔记")
     existing = {b["id"]: b for b in read_catalog(root)["batches"]}
     for batch, _ in prepared:
         if batch["id"] in existing and existing[batch["id"]]["status"] != "historical_import":
@@ -158,10 +169,18 @@ def import_catalog(catalog_path, output, project=None):
     for batch, videos in prepared:
         entries = [snapshot(root, project, catalog_path, batch, item) for item in videos]
         register_batch(
-            output, {"id": batch["id"], "stage": "historical_import"}, {"batch_label": batch["label"]}, entries
+            output,
+            {"id": batch["id"], "stage": "historical_import"},
+            {"batch_label": batch["label"], "notes_directory": str(scope)},
+            entries,
         )
         counts[batch["id"]] = len(entries)
-    return {"index": str(root / "index.html"), "imported_courses": sum(counts.values()), "batches": counts}
+    return {
+        "index": str(root / "index.html"),
+        "notes_directory": str(scope),
+        "imported_courses": sum(counts.values()),
+        "batches": counts,
+    }
 
 
 def main():
@@ -169,8 +188,13 @@ def main():
     parser.add_argument("--catalog", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--project", type=Path)
+    parser.add_argument("--notes-directory", type=Path, help="仅收录这个笔记输出目录中的课程；默认目录文件旁的 batches")
     args = parser.parse_args()
-    print(json.dumps(import_catalog(args.catalog, args.output, args.project), ensure_ascii=False, indent=2))
+    print(
+        json.dumps(
+            import_catalog(args.catalog, args.output, args.project, args.notes_directory), ensure_ascii=False, indent=2
+        )
+    )
 
 
 if __name__ == "__main__":

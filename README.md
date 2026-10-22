@@ -48,7 +48,7 @@ LoreTemper 面向 UI 设计、页面开发和操作教程等视频学习场景�
 
 选择「学习并生成 Skill」，填写批次名称并选择视频。每个完成的视频先独立保存笔记和过程快照；本批全部完成后，冻结交接清单，再生成 Skill。某个视频或生成阶段失败时，已有笔记仍保留。
 
-打开所选输出目录下的 `learning-library/index.html`，即可搜索笔记标题和完整正文、按批次筛选并打开对应视频的完整图文笔记。此页面不需要启动服务。再次向同一输出目录学习会追加收录；同一视频的新版本单独保存。
+打开所选输出目录下的 `learning-library/index.html`，即可搜索笔记标题和完整正文、按批次筛选并打开对应视频的完整图文笔记。此页面不需要启动服务。网页工作流的实际笔记目录为 `<输出目录>/notes`；每份汇总绑定一个笔记输出目录，页面会显示该路径。同一目录内分批追加、保留版本；不同笔记目录各自汇总，不因批次名称相同或选择了同一个汇总存放位置而合并。
 
 后续批次需要结合旧知识生成 Skill 时，勾选 **「补充到已有学习内容」**。预览会列出同一输出目录内将纳入的历史笔记；综合时使用每个视频的最新已收录版本，加上本批新笔记，输出新的 Skill 包。旧笔记和旧 Skill 仍然保留。未勾选时只综合本次选定资料。自动综合会尝试合并重复知识、补充条件并保留冲突，结果仍需审阅。
 
@@ -83,15 +83,15 @@ flowchart TD
 
 1. 准备本机 `learning/catalog.json`：按 `batches` 登记原批次 `id`、`label` 和 `videos`。每个视频需有 `asset_id`、`title`、`reviewed_note` 和 `codex_study.status_file`；`sources`、`sha256`、`review_status` 用于保留来源与审阅信息。
 2. 确认主笔记为 Markdown，旁边存在同名 HTML，并且对应的实际状态文件中 `status` 为 `completed`。导入器会核对文件，不把目录中的旧进度快照当作完成依据。
-3. 指定与后续学习相同的输出目录。例如使用 `exports`：
+3. 用 `--notes-directory` 指定这份汇总所属的原笔记目录。导入器只收录该目录及其子目录中的主笔记，目录外的课程不参与。例如汇总现有 `learning/batches`：
 
 ```bash
-uv run python -m video_tutor.import_learning --catalog learning/catalog.json --output "./exports"
+uv run python -m video_tutor.import_learning --catalog learning/catalog.json --notes-directory "./learning/batches" --output "./learning/batches"
 ```
 
-完成后打开 `exports/learning-library/index.html`。`--output` 指的是 `learning-library` 的上一级目录，选择已有输出目录会合并收录。默认以课程目录文件的上两级为项目根目录；其他布局可用 `--project` 指定原笔记路径的解析根目录。
+完成后打开 `learning/batches/learning-library/index.html`。`--output` 指的是汇总文件夹 `learning-library` 的上一级目录；它只决定存放位置，不能扩大笔记收录范围。已有汇总若绑定其他笔记目录会拒绝补录，需要为该目录另建汇总。`--notes-directory` 省略时默认使用目录文件旁的 `batches` 文件夹。默认以课程目录文件的上两级为项目根目录；其他布局可用 `--project` 指定原笔记路径的解析根目录。
 
-汇总页按原批次整理，支持标题和完整正文搜索。每篇可进入图文笔记、Markdown、原笔记、视频来源与审阅记录。重复收录不会增加同一版本；笔记或来源记录变化后保留为新版本，导入前另存索引备份。原文件和既有审阅状态不改写。
+汇总页在所属笔记目录内按原批次整理，支持标题和完整正文搜索。每篇可进入图文笔记、Markdown、原笔记、视频来源与审阅记录。重复收录不会增加同一版本；笔记或来源记录变化后保留为新版本，导入前另存索引备份。原文件和既有审阅状态不改写。
 
 历史课程未转换为新版结构化知识清单，不会显示虚构的知识数量或去向覆盖结论。图片、素材和详细过程文件仍从原学习目录读取，保留这些目录才能继续查看完整内容。
 

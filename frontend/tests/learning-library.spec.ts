@@ -65,12 +65,19 @@ test("offline library searches full notes and includes earlier batches without h
     resolve(root, "index.html"),
     template.replace(
       "__LIBRARY_DATA__",
-      JSON.stringify({ entries, batches }).replace(/</g, "\\u003c"),
+      JSON.stringify({
+        entries,
+        batches,
+        notes_directory: "/course-notes/design",
+      }).replace(/</g, "\\u003c"),
     ),
   );
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto(pathToFileURL(resolve(root, "index.html")).href);
+  await expect(page.locator("#notes-directory")).toHaveText(
+    "笔记输出目录：/course-notes/design",
+  );
   await expect(page.locator("article")).toHaveCount(3);
   await page.getByLabel("学习批次").selectOption("b1");
   await expect(page.locator("article")).toHaveCount(2);

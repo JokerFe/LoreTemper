@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import fcntl
 import json
+import os
 import re
 import shutil
 import time
@@ -25,6 +26,29 @@ def library_root(output):
 def read_catalog(root):
     path = root / "catalog.json"
     return json.loads(path.read_text()) if path.exists() else {"schema_version": VERSION, "entries": [], "batches": []}
+
+
+def notes_directory(root, catalog, requested=None):
+    """One index belongs to one note output directory, independent of batches."""
+    root = root.resolve()
+    existing = set()
+    if catalog.get("notes_directory"):
+        existing.add((root / catalog["notes_directory"]).resolve())
+    else:
+        # Upgrade old indexes only when their original sources agree. Never
+        # silently assign a mixed legacy index to the requested directory.
+        for entry in catalog["entries"]:
+            if entry.get("kind") == "historical_note":
+                provenance = json.loads((root / entry["directory"] / "provenance.json").read_text())
+                existing.add(Path(provenance["source_catalog"]).resolve().parent / "batches")
+            else:
+                existing.add(root.parent / "notes")
+    if len(existing) > 1:
+        raise ValueError("资料库混合了不同笔记输出目录，请先按目录拆分汇总")
+    target = Path(requested).resolve() if requested else next(iter(existing), root.parent / "notes")
+    if existing and target not in existing:
+        raise ValueError("不能合并不同笔记输出目录：此汇总已属于 " + str(next(iter(existing))))
+    return target
 
 
 def _safe_name(value):
@@ -53,6 +77,8 @@ def verify_entry(folder):
 def snapshot_run(output, run_id):
     from .exporting import export_document
 
+    root = library_root(output)
+    notes_directory(root, read_catalog(root), Path(output) / "notes")
     run = db.one("SELECT * FROM runs WHERE id=?", (run_id,))
     document = db.latest_document(run_id)
     if not run or not document or not run["status"].startswith("succeeded"):
@@ -61,7 +87,6 @@ def snapshot_run(output, run_id):
     asset = db.one("SELECT * FROM assets WHERE id=?", (run["asset_id"],))
     identity = _safe_name(run["asset_id"])
     key = f"{_safe_name(run_id)}-v{document['version']}-{db.digest(body)[:12]}"
-    root = library_root(output)
     folder = root / "entries" / identity / key
     if (folder / "entry.json").exists():
         return verify_entry(folder)
@@ -165,6 +190,7 @@ def snapshot_run(output, run_id):
 def previous_notes(output, selected_ids=None):
     root = library_root(output)
     catalog = read_catalog(root)
+    notes_directory(root, catalog)
     if selected_ids is not None:
         by_id = {e["entry_id"]: e for e in catalog["entries"]}
         if len(set(selected_ids)) != len(selected_ids) or any(i not in by_id for i in selected_ids):
@@ -202,6 +228,8 @@ def register_batch(output, job, config, entries=(), result=None, error=None):
     with (root / ".catalog.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         catalog = read_catalog(root)
+        scope = notes_directory(root, catalog, config.get("notes_directory") or Path(output) / "notes")
+        catalog["notes_directory"] = os.path.relpath(scope, root.resolve())
         records = {e["entry_id"]: e for e in catalog["entries"]}
         records.update({e["entry_id"]: e for e in entries})
         batches = {b["id"]: b for b in catalog["batches"]}
@@ -238,6 +266,7 @@ def register_batch(output, job, config, entries=(), result=None, error=None):
 
 def render_index(root, catalog):
     display = {
+        "notes_directory": str(notes_directory(root, catalog)),
         "entries": [],
         "batches": [
             {

@@ -93,3 +93,83 @@ def test_preflight_preserves_index_when_course_is_incomplete(tmp_path):
     with pytest.raises(FileNotFoundError):
         import_catalog(catalog, output)
     assert (root / "catalog.json").read_bytes() == before
+
+
+def test_different_note_directories_cannot_share_an_index(tmp_path):
+    catalog, _folder = source(tmp_path)
+    other_catalog, other_folder = source(tmp_path / "other")
+    output = tmp_path / "output"
+    import_catalog(catalog, output)
+    before = (library_root(output) / "catalog.json").read_bytes()
+    with pytest.raises(ValueError, match="不能合并不同笔记输出目录"):
+        import_catalog(other_catalog, output)
+    assert (library_root(output) / "catalog.json").read_bytes() == before
+    assert other_folder.is_dir()
+
+
+def test_requested_directory_filters_catalog_and_keeps_batches_separate(tmp_path):
+    catalog, folder = source(tmp_path)
+    doc = json.loads(catalog.read_text())
+    import copy
+    import shutil
+
+    second = copy.deepcopy(doc["batches"][0])
+    second["id"] = "batch-002"
+    destination = folder.parents[1] / "batch-002/another-lesson"
+    shutil.copytree(folder, destination)
+    video = second["videos"][0]
+    video["asset_id"] = "v_2"
+    video["reviewed_note"] = str(destination / "notes.md")
+    video["codex_study"]["status_file"] = str(destination / "status.json")
+    doc["batches"].append(second)
+    write_json(catalog, doc)
+    output = tmp_path / "output"
+    selected = folder.parent
+    result = import_catalog(catalog, output, notes_directory=selected)
+    assert result["batches"] == {"batch-001": 1}
+    c = read_catalog(library_root(output))
+    assert len(c["entries"]) == 1
+    assert str(selected) in (library_root(output) / "index.html").read_text()
+    with pytest.raises(ValueError, match="不能合并不同笔记输出目录"):
+        import_catalog(catalog, output, notes_directory=destination.parent)
+    separate = import_catalog(catalog, tmp_path / "separate-output", notes_directory=destination.parent)
+    assert separate["batches"] == {"batch-002": 1}
+
+
+def test_legacy_mixed_index_requires_split_before_import_or_reuse(tmp_path):
+    from video_tutor.study_library import render_index
+
+    catalog, _folder = source(tmp_path)
+    output = tmp_path / "output"
+    import_catalog(catalog, output)
+    root = library_root(output)
+    c = read_catalog(root)
+    c.pop("notes_directory")
+    c["entries"].append({"entry_id": "synthetic", "kind": "workflow_snapshot"})
+    write_json(root / "catalog.json", c)
+    before = (root / "catalog.json").read_bytes()
+    with pytest.raises(ValueError, match="不同笔记输出目录"):
+        import_catalog(catalog, output)
+    with pytest.raises(ValueError, match="不同笔记输出目录"):
+        previous_notes(output)
+    with pytest.raises(ValueError, match="不同笔记输出目录"):
+        render_index(root, c)
+    assert (root / "catalog.json").read_bytes() == before
+
+
+def test_workflow_directory_and_historical_directory_are_not_interchangeable(tmp_path):
+    from video_tutor.study_library import register_batch, snapshot_run
+
+    catalog, _folder = source(tmp_path)
+    historical = tmp_path / "historical-output"
+    import_catalog(catalog, historical)
+    before = (library_root(historical) / "catalog.json").read_bytes()
+    with pytest.raises(ValueError, match="不能合并不同笔记输出目录"):
+        register_batch(historical, {"id": "new-batch"}, {})
+    with pytest.raises(ValueError, match="不能合并不同笔记输出目录"):
+        snapshot_run(historical, "unused-run")
+    assert (library_root(historical) / "catalog.json").read_bytes() == before
+    workflow = tmp_path / "workflow-output"
+    register_batch(workflow, {"id": "first-batch"}, {})
+    with pytest.raises(ValueError, match="不能合并不同笔记输出目录"):
+        import_catalog(catalog, workflow)

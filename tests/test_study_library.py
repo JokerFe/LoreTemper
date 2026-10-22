@@ -129,8 +129,10 @@ def start_batch(tmp_path, ident, run_ids, include=False):
         skill=StageConfig(provider="codex"),
     )
     submit(body)
+
     def job():
         return db.one("SELECT * FROM workflows WHERE id=?", (ident,))
+
     tick(job())
     batch = "study-" + ident
     db.execute("INSERT INTO study_batches VALUES (?,?,?)", (batch, "{}", time.time()))
@@ -309,3 +311,19 @@ def test_missing_inventory_and_reused_checkpoint_are_explicit(tmp_path):
     write_json(package / "references/coverage/rules.json", [])
     report = map_knowledge(None, package, [{"path": str(folder / "notes.md")}], [], {})
     assert len(report["missing_inventories"]) == 1 and report["items"] == []
+
+
+def test_note_output_directories_keep_independent_indexes_and_history(tmp_path):
+    from video_tutor.study_library import register_batch
+
+    left, right = tmp_path / "project-a", tmp_path / "project-b"
+    a = snapshot_run(left, completed_video("A目录独有内容", "v_a", tmp_path))
+    b = snapshot_run(right, completed_video("B目录独有内容", "v_b", tmp_path))
+    register_batch(left, {"id": "batch-001"}, {}, [a])
+    register_batch(right, {"id": "batch-001"}, {}, [b])
+    assert [n["title"] for n in previous_notes(left)] == ["A目录独有内容"]
+    assert [n["title"] for n in previous_notes(right)] == ["B目录独有内容"]
+    assert "B目录独有内容" not in (library_root(left) / "index.html").read_text()
+    assert "A目录独有内容" not in (library_root(right) / "index.html").read_text()
+    with pytest.raises(ValueError, match="重新预览"):
+        previous_notes(left, [b["entry_id"]])

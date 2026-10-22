@@ -199,8 +199,13 @@
         <small>LORETEMPER / LEARNING LIBRARY</small>
         <h1>每一次学习，都有迹可循。</h1>
         <p>
-          按批次找到视频笔记，按关键词回查知识。后续批次追加收录，历史版本与过程材料持续保留。
+          只汇总当前笔记输出目录。目录内按批次追加、按全文搜索；其他输出目录各自保留独立汇总。
         </p>
+        <p
+          id="notes-directory"
+          class="muted"
+          style="overflow-wrap: anywhere"
+        ></p>
         <p class="muted">
           笔记为主题总结；原始讲解、截图和质量报告独立保存。自动检查不等于来源审阅。
         </p>
@@ -236,6 +241,8 @@
       const data = JSON.parse(
         document.getElementById("library-data").textContent,
       );
+      document.getElementById("notes-directory").textContent =
+        data.notes_directory ? "笔记输出目录：" + data.notes_directory : "";
       const search = document.getElementById("search"),
         batchSelect = document.getElementById("batch"),
         notes = document.getElementById("notes");

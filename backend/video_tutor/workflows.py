@@ -233,6 +233,9 @@ def resolve(body):
         "estimates": {},
     }
     if body.mode != "skill":
+        from .study_library import library_root, notes_directory, read_catalog
+        root = library_root(output)
+        notes_directory(root, read_catalog(root), output / "notes")
         paths = body.video_paths or (defaults["video_paths"] if body.auto_input else [])
         if not paths:
             raise ValueError("还没有配置视频来源，请选择文件或文件夹")
